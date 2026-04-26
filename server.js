@@ -13,29 +13,24 @@ const PORT = process.env.PORT || 3000;
 
 // ===== ROOT =====
 app.get("/", (req, res) => {
-  res.send("🚀 MechMinds AI Server Running");
+  res.send("🚀 MechMinds AI Server Running (Sarvam)");
 });
 
-// ===== CHAT =====
+// ===== CHAT + TTS =====
 app.post("/chat", async (req, res) => {
   try {
     const { message } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ error: "Message required" });
-    }
-
-    const response = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
+    // 🧠 AI TEXT RESPONSE
+    const aiResponse = await axios.post(
+      "https://api.sarvam.ai/v1/chat/completions",
       {
-        model: "openai/gpt-oss-120b",
-        temperature: 0.6,
-        max_tokens: 150,   // 🔥 LIMIT SIZE (important)
+        model: "sarvam-m",
         messages: [
           {
             role: "system",
             content:
-              "You are MechMinds AI assistant. Give short, clear answers in plain text. Do not use tables, markdown, or formatting."
+              "You are MechMinds AI assistant. Give short, clear answers in plain text."
           },
           {
             role: "user",
@@ -45,20 +40,40 @@ app.post("/chat", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          Authorization: `Bearer ${process.env.SARVAM_API_KEY}`,
           "Content-Type": "application/json"
         }
       }
     );
 
     const reply =
-      response.data.choices?.[0]?.message?.content || "No response";
+      aiResponse.data.choices?.[0]?.message?.content || "No response";
 
-    res.json({ reply });
+    // 🔊 TTS GENERATION
+    const ttsResponse = await axios.post(
+      "https://api.sarvam.ai/v1/audio/speech",
+      {
+        input: reply,
+        voice: "female",   // or male
+        format: "mp3"
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SARVAM_API_KEY}`
+        }
+      }
+    );
+
+    const audioURL = ttsResponse.data.audio_url;
+
+    res.json({
+      reply,
+      audio: audioURL
+    });
 
   } catch (error) {
-    console.error("ERROR:", error.response?.data || error.message);
-    res.status(500).json({ error: "AI request failed" });
+    console.error(error.response?.data || error.message);
+    res.status(500).json({ error: "Sarvam AI failed" });
   }
 });
 
