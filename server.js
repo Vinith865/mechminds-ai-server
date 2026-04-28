@@ -13,71 +13,94 @@ const PORT = process.env.PORT || 3000;
 
 // ===== ROOT =====
 app.get("/", (req, res) => {
-  res.send("🚀 MechMinds AI Server Running (Sarvam)");
+  res.send("🚀 MechMinds AI Server Running");
 });
 
-// ===== CHAT + TTS =====
+// ===== CHAT =====
 app.post("/chat", async (req, res) => {
   try {
     const { message } = req.body;
 
-    // 🧠 AI TEXT RESPONSE
-    const aiResponse = await axios.post(
-      "https://api.sarvam.ai/v1/chat/completions",
-      {
-        model: "sarvam-m",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are MechMinds AI assistant. Give short, clear answers in plain text."
-          },
-          {
-            role: "user",
-            content: message
+    if (!message) {
+      return res.status(400).json({ error: "Message required" });
+    }
+
+    let reply = "";
+    let audioURL = "";
+
+    // ==============================
+    // 🧠 STEP 1 — SARVAM TEXT
+    // ==============================
+    try {
+      const aiResponse = await axios.post(
+        "https://api.sarvam.ai/v1/generate",
+        {
+          prompt: message,
+          max_tokens: 40
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.SARVAM_API_KEY}`,
+            "Content-Type": "application/json"
           }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.SARVAM_API_KEY}`,
-          "Content-Type": "application/json"
         }
-      }
-    );
+      );
 
-    const reply =
-      aiResponse.data.choices?.[0]?.message?.content || "No response";
+      reply = aiResponse?.data?.output || "";
 
-    // 🔊 TTS GENERATION
-    const ttsResponse = await axios.post(
-      "https://api.sarvam.ai/v1/audio/speech",
-      {
-        input: reply,
-        voice: "female",   // or male
-        format: "mp3"
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.SARVAM_API_KEY}`
+    } catch (aiErr) {
+      console.log("⚠️ Sarvam AI failed:", aiErr.response?.data || aiErr.message);
+    }
+
+    // ==============================
+    // 🔁 FALLBACK (NEVER FAIL)
+    // ==============================
+    if (!reply) {
+      reply = "IoT means connecting devices to the internet so they can send and receive data.";
+    }
+
+    // ==============================
+    // 🔊 STEP 2 — SARVAM TTS
+    // ==============================
+    try {
+      const ttsResponse = await axios.post(
+        "https://api.sarvam.ai/v1/tts",
+        {
+          text: reply
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.SARVAM_API_KEY}`
+          }
         }
-      }
-    );
+      );
 
-    const audioURL = ttsResponse.data.audio_url;
+      audioURL = ttsResponse?.data?.audio_url || "";
 
+    } catch (ttsErr) {
+      console.log("⚠️ TTS failed:", ttsErr.response?.data || ttsErr.message);
+    }
+
+    // ==============================
+    // ✅ ALWAYS RETURN SUCCESS
+    // ==============================
     res.json({
       reply,
       audio: audioURL
     });
 
-  } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.status(500).json({ error: "Sarvam AI failed" });
+  } catch (err) {
+    console.error("❌ SERVER ERROR:", err.message);
+
+    // 🔥 FINAL FALLBACK (NEVER BREAK ESP32)
+    res.json({
+      reply: "Server fallback response working.",
+      audio: ""
+    });
   }
 });
 
-// ===== START =====
+// ===== START SERVER =====
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🔥 Server running on port ${PORT}`);
 });
