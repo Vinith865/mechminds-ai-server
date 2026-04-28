@@ -5,7 +5,6 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
@@ -26,11 +25,8 @@ app.post("/chat", async (req, res) => {
     }
 
     let reply = "";
-    let audioURL = "";
 
-    // ==============================
-    // 🧠 STEP 1 — SARVAM TEXT
-    // ==============================
+    // ===== TRY SARVAM (TEXT ONLY) =====
     try {
       const aiResponse = await axios.post(
         "https://api.sarvam.ai/v1/generate",
@@ -47,60 +43,38 @@ app.post("/chat", async (req, res) => {
       );
 
       reply = aiResponse?.data?.output || "";
-
-    } catch (aiErr) {
-      console.log("⚠️ Sarvam AI failed:", aiErr.response?.data || aiErr.message);
+    } catch (err) {
+      console.log("⚠️ Sarvam failed:", err.response?.data || err.message);
     }
 
-    // ==============================
-    // 🔁 FALLBACK (NEVER FAIL)
-    // ==============================
+    // ===== FALLBACK (ALWAYS RETURN SOMETHING) =====
     if (!reply) {
-      reply = "IoT means connecting devices to the internet so they can send and receive data.";
+      reply =
+        "IoT means connecting devices to the internet so they can send and receive data.";
     }
 
-    // ==============================
-    // 🔊 STEP 2 — SARVAM TTS
-    // ==============================
-    try {
-      const ttsResponse = await axios.post(
-        "https://api.sarvam.ai/v1/tts",
-        {
-          text: reply
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.SARVAM_API_KEY}`
-          }
-        }
-      );
+    // ===== WORKING AUDIO (ESP32 SAFE) =====
+    const audioURL =
+      "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" +
+      encodeURIComponent(reply);
 
-      audioURL = ttsResponse?.data?.audio_url || "";
-
-    } catch (ttsErr) {
-      console.log("⚠️ TTS failed:", ttsErr.response?.data || ttsErr.message);
-    }
-
-    // ==============================
-    // ✅ ALWAYS RETURN SUCCESS
-    // ==============================
+    // ===== RESPONSE =====
     res.json({
       reply,
       audio: audioURL
     });
-
   } catch (err) {
     console.error("❌ SERVER ERROR:", err.message);
 
-    // 🔥 FINAL FALLBACK (NEVER BREAK ESP32)
+    // FINAL FALLBACK (never break ESP32)
     res.json({
-      reply: "Server fallback response working.",
+      reply: "Server fallback working",
       audio: ""
     });
   }
 });
 
-// ===== START SERVER =====
+// ===== START =====
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🔥 Server running on port ${PORT}`);
 });
